@@ -22,7 +22,7 @@ Globals:
     Environment:
       Variables:
         LOG_LEVEL: INFO
-        BATCH_SIZE: 25
+        BATCH_SIZE: 10
         TABLE_NAME: Deadpool
 
 Resources:
@@ -38,6 +38,13 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: Deadpool
         - CloudWatchPutMetricPolicy: {}
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ec2:CreateNetworkInterface
+                - ec2:DeleteNetworkInterface
+                - ec2:DescribeNetworkInterfaces
+              Resource: "*"
       Events:
         DailyCheck:
           Type: Schedule
