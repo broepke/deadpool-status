@@ -28,8 +28,10 @@ Globals:
 Resources:
   DeadpoolStatusChecker:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: python3.9
     Properties:
-      CodeUri: src/
+      CodeUri: ./src
       Handler: lambda_function.lambda_handler
       Description: Checks and updates person records with Wikipedia data
       Policies:

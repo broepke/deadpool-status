@@ -17,7 +17,7 @@ This service maintains person records in DynamoDB by fetching and updating birth
 │       └── wiki.py         # Wikipedia/Wikidata operations
 ├── tests/                  # Unit and integration tests
 ├── requirements.txt        # Python dependencies
-└── template.yaml          # AWS SAM template
+└── template.yaml           # AWS SAM template
 ```
 
 ## Prerequisites

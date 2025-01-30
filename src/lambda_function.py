@@ -16,7 +16,8 @@ from utils.wiki import (
 from utils.dynamo import (
     get_persons_without_death_date,
     batch_update_persons,
-    create_hash
+    create_hash,
+    DateTimeEncoder
 )
 
 # Configure logging
@@ -127,7 +128,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     total_failed = 0
     
     try:
-        # Process records in batches
+        # When running locally, just process one batch
+        is_local = hasattr(context, 'log_stream_name') and context.log_stream_name == 'local'
+        
         while True:
             persons = get_persons_without_death_date(BATCH_SIZE)
             if not persons:
@@ -138,10 +141,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             total_updated += success_count
             total_failed += failure_count
             
-            # Break if we've processed all records or hit the time limit
-            time_elapsed = (datetime.now() - start_time).total_seconds()
-            if time_elapsed > 240:  # Leave 60s buffer in 5min timeout
-                logger.warning("Time limit approaching, stopping processing")
+            # Break if running locally or hit time limit
+            if is_local or (datetime.now() - start_time).total_seconds() > 240:
                 break
     
     except Exception as e:
@@ -153,7 +154,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'processed': total_processed,
                 'updated': total_updated,
                 'failed': total_failed
-            })
+            }, cls=DateTimeEncoder)
         }
     
     return {
@@ -163,5 +164,5 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'updated': total_updated,
             'failed': total_failed,
             'duration': (datetime.now() - start_time).total_seconds()
-        })
+        }, cls=DateTimeEncoder)
     }
