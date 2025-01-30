@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: AWS Lambda function to check and update person records with Wikipedia data
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Environment name
+
+Globals:
+  Function:
+    Runtime: python3.9
+    Architectures:
+      - x86_64
+    Timeout: 300
+    MemorySize: 256
+    Environment:
+      Variables:
+        LOG_LEVEL: INFO
+        BATCH_SIZE: 25
+        TABLE_NAME: Deadpool
+
+Resources:
+  DeadpoolStatusChecker:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: lambda_function.lambda_handler
+      Description: Checks and updates person records with Wikipedia data
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: Deadpool
+        - CloudWatchPutMetricPolicy: {}
+      Events:
+        DailyCheck:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 0 * * ? *)
+            Name: deadpool-status-daily-check
+            Description: Daily check of person records
+            Enabled: true
+            RetryPolicy:
+              MaximumRetryAttempts: 2
+      Tags:
+        Environment: !Ref Environment
+
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${DeadpoolStatusChecker}
+      RetentionInDays: 30
+
+Outputs:
+  LambdaFunctionName:
+    Description: Name of the Lambda function
+    Value: !Ref DeadpoolStatusChecker
+
+  LambdaFunctionArn:
+    Description: ARN of the Lambda function
+    Value: !GetAtt DeadpoolStatusChecker.Arn
