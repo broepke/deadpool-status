@@ -29,9 +29,8 @@ This service maintains person records in DynamoDB by fetching and updating birth
 ## Development Setup
 1. Create Python virtual environment:
    ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # Unix
-   .venv\Scripts\activate     # Windows
+   python -m venv venv
+   source venv/bin/activate  # Unix
    ```
 
 2. Install dependencies:
