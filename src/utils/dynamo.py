@@ -1,7 +1,6 @@
 """
 DynamoDB utilities for person record management
 """
-import hashlib
 import json
 import os
 import logging
@@ -100,20 +99,3 @@ def batch_update_persons(persons: List[Dict[str, Any]]) -> tuple[int, int]:
     
     logger.info(f"Batch update complete: {success_count} succeeded, {failure_count} failed")
     return success_count, failure_count
-
-def create_hash(data: Dict[str, Any]) -> str:
-    """Create a hash of the data for change detection."""
-    # Create a copy of the data without fields that should trigger updates
-    hash_data = data.copy()
-    
-    # Remove fields that should trigger updates when missing
-    fields_to_remove = [
-        'Age', 'BirthDate', 'DeathDate',  # Date-related fields
-        'WikiPage', 'WikiID'  # Wiki-related fields that might be added
-    ]
-    
-    for field in fields_to_remove:
-        hash_data.pop(field, None)
-    
-    serialized = json.dumps(hash_data, sort_keys=True)
-    return hashlib.md5(serialized.encode()).hexdigest()

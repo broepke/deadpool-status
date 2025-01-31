@@ -16,7 +16,6 @@ from utils.wiki import (
 from utils.dynamo import (
     get_persons_without_death_date,
     batch_update_persons,
-    create_hash,
     format_date
 )
 
