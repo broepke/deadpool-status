@@ -24,21 +24,21 @@ def fetch_wikidata(params: Dict[str, Any], retries: int = 3, delay: int = 1) -> 
     Returns:
         JSON response from the API, or None if all retries fail
     """
+    url = "https://www.wikidata.org/w/api.php"
+    logger.info(f"Making Wikidata API request to {url}")
+    logger.info(f"Parameters: {json.dumps(params, indent=2)}")
+
     for attempt in range(retries):
         try:
-            logger.info(f"Wikidata API request: {json.dumps(params)}")
-            response = requests.get(
-                "https://www.wikidata.org/w/api.php",
-                params=params,
-                timeout=5
-            )
+            response = requests.get(url, params=params, timeout=5)
             response.raise_for_status()
             data = response.json()
-            logger.info(f"Wikidata API response: {json.dumps(data)}")
+            logger.info(f"Wikidata API response: {json.dumps(data, indent=2)}")
             return data
         except (requests.exceptions.RequestException, ValueError) as e:
-            logger.error("Attempt %s failed: %s", attempt + 1, e)
+            logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
             if attempt < retries - 1:
+                logger.info(f"Waiting {delay} seconds before retry...")
                 time.sleep(delay)
             continue
 
@@ -63,10 +63,13 @@ def resolve_redirect(title: str) -> Optional[str]:
             "redirects": 1,
             "format": "json"
         }
+        logger.info(f"Making Wikipedia API request to {wikipedia_api_url}")
+        logger.info(f"Parameters: {json.dumps(params, indent=2)}")
+
         response = requests.get(wikipedia_api_url, params=params, timeout=5)
         response.raise_for_status()
         data = response.json()
-        logger.info(f"Wikipedia API response: {json.dumps(data)}")
+        logger.info(f"Wikipedia API response: {json.dumps(data, indent=2)}")
 
         # Handle redirects
         if "redirects" in data.get("query", {}):
@@ -89,7 +92,7 @@ def resolve_redirect(title: str) -> Optional[str]:
 
         return title
     except Exception as e:
-        logger.error(f"Error resolving redirect for {title}: {e}")
+        logger.error(f"Error resolving redirect for {title}: {str(e)}")
         return None
 
 def get_wiki_id_from_page(page_title: str) -> Optional[str]:
@@ -106,12 +109,13 @@ def get_wiki_id_from_page(page_title: str) -> Optional[str]:
 
     try:
         # First try to resolve any redirects
+        logger.info(f"Looking up WikiID for page: {page_title}")
         resolved_title = resolve_redirect(page_title)
         if not resolved_title:
             logger.warning(f"Could not resolve page title: {page_title}")
             return None
 
-        logger.info(f"Getting Wikidata ID for page: {resolved_title}")
+        logger.info(f"Getting Wikidata ID for resolved page: {resolved_title}")
         params = {
             "action": "wbgetentities",
             "format": "json",
@@ -134,7 +138,7 @@ def get_wiki_id_from_page(page_title: str) -> Optional[str]:
         logger.info(f"Found Wikidata ID {entity_id} for page {resolved_title}")
         return entity_id
     except Exception as e:
-        logger.error(f"Error getting Wiki ID for {page_title}: {e}")
+        logger.error(f"Error getting Wiki ID for {page_title}: {str(e)}")
         return None
 
 @lru_cache(maxsize=128)
@@ -186,11 +190,11 @@ def get_birth_death_date(wikidata_prop_id: str, wikidata_q_number: str) -> Optio
                 date_obj = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ")
             return date_obj
         except ValueError as e:
-            logger.error(f"Error parsing date {date_str}: {e}")
+            logger.error(f"Error parsing date {date_str}: {str(e)}")
             return None
 
     except Exception as e:
-        logger.error(f"Error getting date for {wikidata_q_number}: {e}")
+        logger.error(f"Error getting date for {wikidata_q_number}: {str(e)}")
         return None
 
 def calculate_age(birth_date: datetime, death_date: Optional[datetime] = None) -> int:

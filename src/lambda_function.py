@@ -5,7 +5,6 @@ AWS Lambda handler for updating person records with Wikipedia data
 import os
 import json
 import logging
-import time
 from datetime import datetime
 from typing import Dict, Any, List
 
@@ -26,22 +25,8 @@ logger = logging.getLogger()
 logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
 
 # Constants
-BATCH_SIZE = int(os.environ.get('BATCH_SIZE', 10))
 BIRTH_DATE_PROP = 'P569'
 DEATH_DATE_PROP = 'P570'
-WIKI_API_DELAY = 1  # Delay between Wikipedia API calls in seconds
-
-def generate_wiki_page(name: str) -> str:
-    """Generate a Wikipedia page name from a person's name.
-    
-    Args:
-        name: Person's name
-        
-    Returns:
-        Wikipedia page name (with underscores)
-    """
-    # Replace spaces with underscores and handle special characters
-    return name.strip().replace(' ', '_')
 
 def process_person(person: Dict[str, Any]) -> Dict[str, Any]:
     """Process a single person record.
@@ -56,15 +41,14 @@ def process_person(person: Dict[str, Any]) -> Dict[str, Any]:
     name = person.get('Name', '')
     wiki_page = person.get('WikiPage')
     wiki_id = person.get('WikiID')
+    current_age = person.get('Age')
     
     logger.info("Processing person: %s (ID: %s)", name, person_id)
+    logger.info("Current data: %s", json.dumps(person, default=str))
     
-    # Create hash of current data
-    original_hash = create_hash(person)
-    
-    # Generate WikiPage from Name if not present
+    # Generate WikiPage if not present
     if not wiki_page and name:
-        wiki_page = generate_wiki_page(name)
+        wiki_page = name.replace(' ', '_')
         person['WikiPage'] = wiki_page
         logger.info("Generated WikiPage %s for %s", wiki_page, name)
     
@@ -74,60 +58,53 @@ def process_person(person: Dict[str, Any]) -> Dict[str, Any]:
         if wiki_id:
             person['WikiID'] = wiki_id
             logger.info("Found Wiki ID %s for %s", wiki_id, name)
-        else:
-            # If we can't find the ID with the generated page name,
-            # try with variations of the name
-            variations = [
-                name.replace(' ', '_'),  # Basic underscore replacement
-                ''.join(word.capitalize() for word in name.split()),  # CamelCase
-                '_'.join(word.capitalize() for word in name.split())  # Title_Case
-            ]
-            for variant in variations:
-                if variant != wiki_page:
-                    logger.info("Trying variant %s for %s", variant, name)
-                    wiki_id = get_wiki_id_from_page(variant)
-                    if wiki_id:
-                        person['WikiID'] = wiki_id
-                        person['WikiPage'] = variant
-                        logger.info("Found Wiki ID %s using variant %s", wiki_id, variant)
-                        break
     
     if not wiki_id:
-        logger.warning("No Wiki ID available for %s", name)
+        logger.warning("No Wiki ID available for %s (WikiPage: %s)", name, wiki_page)
         return None
     
     # Get birth and death dates
     try:
         birth_date = get_birth_death_date(BIRTH_DATE_PROP, wiki_id)
-        time.sleep(WIKI_API_DELAY)  # Rate limiting
         death_date = get_birth_death_date(DEATH_DATE_PROP, wiki_id)
         
+        needs_update = False
+        
         if birth_date:
-            person['BirthDate'] = format_date(birth_date)
+            new_birth_date = format_date(birth_date)
+            if person.get('BirthDate') != new_birth_date:
+                person['BirthDate'] = new_birth_date
+                logger.info("Updated birth date to %s for %s", new_birth_date, name)
+                needs_update = True
+        
+        if death_date:
+            new_death_date = format_date(death_date)
+            if person.get('DeathDate') != new_death_date:
+                person['DeathDate'] = new_death_date
+                logger.info("Found death date %s for %s", new_death_date, name)
+                needs_update = True
             
-            # Calculate age
-            age = calculate_age(birth_date, death_date)
-            person['Age'] = age
-            
-            if death_date:
-                person['DeathDate'] = format_date(death_date)
-                logger.info("Found death date for %s: %s", name, format_date(death_date))
+        # Calculate age
+        if birth_date:
+            new_age = calculate_age(birth_date, death_date)
+            if str(current_age) != str(new_age):  # Compare as strings since DynamoDB stores numbers as strings
+                person['Age'] = new_age
+                logger.info("Updated age from %s to %d for %s", current_age, new_age, name)
+                needs_update = True
                 
+        if needs_update:
+            logger.info("Changes detected for %s. Updated data: %s", name, json.dumps(person, default=str))
+            return person
+    
     except Exception as e:
         logger.error("Error processing dates for %s: %s", name, e)
         return None
     
-    # Check if any data changed
-    new_hash = create_hash(person)
-    if new_hash != original_hash:
-        logger.info("Changes detected for %s", name)
-        return person
-    
     logger.info("No changes needed for %s", name)
     return None
 
-def process_batch(persons: List[Dict[str, Any]]) -> tuple[int, int]:
-    """Process a batch of person records.
+def process_records(persons: List[Dict[str, Any]]) -> tuple[int, int]:
+    """Process a list of person records.
 
     Args:
         persons: List of person records to process
@@ -147,10 +124,10 @@ def process_batch(persons: List[Dict[str, Any]]) -> tuple[int, int]:
                         person.get('Name', 'Unknown'), e)
     
     if updates:
-        logger.info(f"Batch complete: {len(updates)} updates ready")
+        logger.info(f"Processing complete: {len(updates)} updates ready")
         return batch_update_persons(updates)
     
-    logger.info("Batch complete: no updates needed")
+    logger.info("Processing complete: no updates needed")
     return 0, 0
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -169,28 +146,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     total_failed = 0
     
     try:
-        # Process records in batches
-        while True:
-            persons = get_persons_without_death_date(BATCH_SIZE)
-            if not persons:
-                logger.info("No more persons to process")
-                break
-                
-            total_processed += len(persons)
-            success_count, failure_count = process_batch(persons)
-            total_updated += success_count
-            total_failed += failure_count
+        # Get all records that need processing
+        persons = get_persons_without_death_date()
+        if persons:
+            total_processed = len(persons)
+            success_count, failure_count = process_records(persons)
+            total_updated = success_count
+            total_failed = failure_count
             
             logger.info(
                 "Progress - Processed: %d, Updated: %d, Failed: %d",
                 total_processed, total_updated, total_failed
             )
-            
-            # Break if we've processed all records or hit the time limit
-            time_elapsed = (datetime.now() - start_time).total_seconds()
-            if time_elapsed > 240:  # Leave 60s buffer in 5min timeout
-                logger.warning("Time limit approaching, stopping processing")
-                break
     
     except Exception as e:
         logger.error("Error in main processing loop: %s", e)

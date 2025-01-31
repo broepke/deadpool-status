@@ -1,12 +1,19 @@
 import json
 import os
 import sys
+import logging
 sys.path.append('src')
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # Set required environment variables
 os.environ['TABLE_NAME'] = 'Deadpool'
 os.environ['LOG_LEVEL'] = 'INFO'
-os.environ['BATCH_SIZE'] = '25'
+os.environ['BATCH_SIZE'] = '10'
 
 from lambda_function import lambda_handler
 
