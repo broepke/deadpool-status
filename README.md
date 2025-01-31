@@ -45,12 +45,7 @@ This service maintains person records in DynamoDB by fetching and updating birth
    ```
 
 ## Local Testing
-1. Run unit tests:
-   ```bash
-   python -m pytest tests/
-   ```
-
-2. Test Lambda locally:
+1. Test Lambda locally:
    ```bash
    sam local invoke -e events/schedule.json
    ```
