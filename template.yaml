@@ -49,7 +49,7 @@ Resources:
         DailyCheck:
           Type: Schedule
           Properties:
-            Schedule: cron(0 0 * * ? *)
+            Schedule: cron(0 18 * * ? *)
             Name: deadpool-status-daily-check
             Description: Daily check of person records
             Enabled: true
