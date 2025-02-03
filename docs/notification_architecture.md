@@ -20,24 +20,23 @@ This document outlines the architecture for adding death notifications to the ex
 ## Component Architecture
 
 ### 1. Contact Information Storage
-**Recommendation**: Store in DynamoDB (Same table, new entity type)
+**Recommendation**: Extend existing PLAYER records
 
 **Rationale**:
-- Keeps user data consolidated in one place
-- Reduces cross-service dependencies
-- Simpler access patterns
-- More flexible than Cognito for game-specific data
+- Current schema is sparse and can accommodate additional fields
+- Maintains simplicity of data model
+- Follows single-table design principles
+- No need for additional access patterns that would benefit from separation
 
-**Data Structure**:
+**Updated Data Structure**:
 ```json
 {
-  "PK": "USER#uuid",
-  "SK": "PROFILE",
+  "PK": "PLAYER#uuid",
+  "SK": "DETAILS",
+  "FirstName": "string",
+  "LastName": "string",
   "PhoneNumber": "string",
-  "NotificationPreferences": {
-    "smsEnabled": boolean,
-    "deathNotifications": boolean
-  },
+  "SmsNotificationsEnabled": boolean,
   "PhoneVerified": boolean,
   "LastNotified": "string (ISO-8601)"
 }
@@ -86,7 +85,7 @@ DeathNotificationTopic:
 1. **Daily Check Process**:
    - Lambda detects death date changes
    - Identifies new deaths
-   - Queries for users with notifications enabled
+   - Queries for users with SmsNotificationsEnabled = true
    - Batches notifications
 
 2. **Notification Process**:
@@ -114,7 +113,7 @@ DeathNotificationTopic:
 ## Infrastructure Updates
 
 ### 1. DynamoDB Updates
-- Add GSI for user queries
+- No new GSIs required (can use existing SK-PK-index)
 - Update IAM permissions
 
 ### 2. New IAM Permissions
@@ -170,7 +169,7 @@ NOTIFICATION_BATCH_SIZE: 100
 
 2. **Advanced Features**:
    - Custom notification templates
-   - User notification preferences
+   - Additional notification preferences
    - Notification history
    - Analytics dashboard
 
@@ -183,7 +182,7 @@ NOTIFICATION_BATCH_SIZE: 100
    - Add notification logic to Lambda
 
 2. **Phase 2: Management**
-   - Add user preferences
+   - Add user preferences UI
    - Implement monitoring
    - Create admin dashboard
 
