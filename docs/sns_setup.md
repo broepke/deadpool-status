@@ -23,7 +23,7 @@
    - Go to "Text messaging (SMS)" in SNS console
    - Under "Sandbox destination phone numbers"
    - Click "Add phone number"
-   - Enter your phone number (+14155479222)
+   - Enter your phone number (+11122233333)
    - Follow verification process
 
 ## Moving to Production
