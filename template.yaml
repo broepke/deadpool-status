@@ -26,6 +26,15 @@ Globals:
         TABLE_NAME: Deadpool
 
 Resources:
+  DeathNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub deadpool-death-notifications-${Environment}
+      DisplayName: "Deadpool Game"
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
   DeadpoolStatusChecker:
     Type: AWS::Serverless::Function
     Metadata:
@@ -34,10 +43,15 @@ Resources:
       CodeUri: ./src
       Handler: lambda_function.lambda_handler
       Description: Checks and updates person records with Wikipedia data
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref DeathNotificationTopic
       Policies:
         - DynamoDBCrudPolicy:
             TableName: Deadpool
         - CloudWatchPutMetricPolicy: {}
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt DeathNotificationTopic.TopicName
         - Statement:
             - Effect: Allow
               Action:
@@ -72,3 +86,7 @@ Outputs:
   LambdaFunctionArn:
     Description: ARN of the Lambda function
     Value: !GetAtt DeadpoolStatusChecker.Arn
+
+  NotificationTopicArn:
+    Description: ARN of the SNS notification topic
+    Value: !Ref DeathNotificationTopic

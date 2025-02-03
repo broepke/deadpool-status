@@ -1,12 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: DynamoDB table for Deadpool Status Checker
+Description: Update DynamoDB table for Deadpool Status Checker
 
 Resources:
-  DeadpoolTable:
-    Type: AWS::DynamoDB::Table
+  DeadpoolTableUpdate:
+    Type: AWS::DynamoDB::GlobalTable
     Properties:
       TableName: Deadpool
-      BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: PK
           AttributeType: S
@@ -26,6 +25,9 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
       Tags:
         - Key: Environment
           Value: !Ref AWS::StackName
@@ -33,7 +35,7 @@ Resources:
 Outputs:
   TableName:
     Description: Name of the DynamoDB table
-    Value: !Ref DeadpoolTable
+    Value: !Ref DeadpoolTableUpdate
   TableArn:
     Description: ARN of the DynamoDB table
-    Value: !GetAtt DeadpoolTable.Arn
+    Value: !GetAtt DeadpoolTableUpdate.Arn

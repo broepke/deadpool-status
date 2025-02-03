@@ -18,6 +18,7 @@ from utils.dynamo import (
     batch_update_persons,
     format_date
 )
+from utils.sns import send_death_notification
 
 # Configure logging
 logger = logging.getLogger()
@@ -68,6 +69,7 @@ def process_person(person: Dict[str, Any]) -> Dict[str, Any]:
         death_date = get_birth_death_date(DEATH_DATE_PROP, wiki_id)
         
         needs_update = False
+        death_notification_needed = False
         
         if birth_date:
             new_birth_date = format_date(birth_date)
@@ -78,7 +80,10 @@ def process_person(person: Dict[str, Any]) -> Dict[str, Any]:
         
         if death_date:
             new_death_date = format_date(death_date)
+            # Check if this is a new death (wasn't recorded before)
             if person.get('DeathDate') != new_death_date:
+                if person.get('DeathDate') is None:
+                    death_notification_needed = True
                 person['DeathDate'] = new_death_date
                 logger.info("Found death date %s for %s", new_death_date, name)
                 needs_update = True
@@ -93,6 +98,15 @@ def process_person(person: Dict[str, Any]) -> Dict[str, Any]:
                 
         if needs_update:
             logger.info("Changes detected for %s. Updated data: %s", name, json.dumps(person, default=str))
+            
+            # Send notification if this is a new death
+            if death_notification_needed:
+                try:
+                    send_death_notification(name, person['DeathDate'])
+                except Exception as e:
+                    logger.error("Failed to send death notification for %s: %s", name, e)
+                    # Continue processing even if notification fails
+            
             return person
     
     except Exception as e:
