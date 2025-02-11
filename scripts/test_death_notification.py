@@ -4,10 +4,10 @@ import json
 from datetime import datetime
 from botocore.exceptions import ClientError
 
-def simulate_death_notification():
+def test_death_notification():
     """
-    Test the death notification system by simulating a death update
-    without actually sending SMS messages
+    Test the death notification system by creating a test death record
+    and sending actual SMS notifications
     """
     # Initialize DynamoDB client
     dynamodb = boto3.resource('dynamodb')
@@ -61,10 +61,26 @@ def simulate_death_notification():
         
         print(f"\nSNS Topic ARN: {sns_topic_arn}")
         
-        # Show what message would be sent
+        # Format and send the actual message
         message = f"🎯 {test_person['Name']} has passed away on {test_person['DeathDate']}. Check the game for updates!"
-        print("\nMessage that would be sent:")
+        print("\nSending message:")
         print(message)
+        
+        # Initialize SNS client and send message
+        sns = boto3.client('sns')
+        response = sns.publish(
+            TopicArn=sns_topic_arn,
+            Message=message,
+            MessageAttributes={
+                'AWS.SNS.SMS.SMSType': {
+                    'DataType': 'String',
+                    'StringValue': 'Transactional'
+                }
+            }
+        )
+        
+        print(f"\nNotification sent successfully!")
+        print(f"MessageId: {response['MessageId']}")
         
         print("\nTest completed successfully!")
         
@@ -88,4 +104,4 @@ def simulate_death_notification():
             print(f"Error cleaning up test record: {str(e)}")
 
 if __name__ == '__main__':
-    simulate_death_notification()
+    test_death_notification()

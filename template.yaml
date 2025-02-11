@@ -55,6 +55,13 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
+                - sns:Publish
+                - sns:CheckIfPhoneNumberIsOptedOut
+                - sns:OptInPhoneNumber
+              Resource: "*"
+        - Statement:
+            - Effect: Allow
+              Action:
                 - ec2:CreateNetworkInterface
                 - ec2:DeleteNetworkInterface
                 - ec2:DescribeNetworkInterfaces
