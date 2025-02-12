@@ -12,7 +12,7 @@ Users can add their phone number using the update_user_sms.py script:
 ```bash
 python scripts/update_user_sms.py +1XXXXXXXXXX
 ```
-- Phone number must be in E.164 format (e.g., +14155479222)
+- Phone number must be in E.164 format (e.g., +1XXXXXXXXXX)
 - This sets SmsNotificationsEnabled to True
 - Sets PhoneVerified to False initially
 
@@ -32,10 +32,10 @@ The process:
 ## Example Flow
 ```bash
 # 1. Add phone number
-python scripts/update_user_sms.py +14155479222
+python scripts/update_user_sms.py +1XXXXXXXXXX
 
 # 2. Verify the number
-python scripts/verify_phone.py +14155479222
+python scripts/verify_phone.py +1XXXXXXXXXX
 
 # 3. Enter verification code when prompted
 > Enter the verification code you received: 123456

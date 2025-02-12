@@ -11,7 +11,7 @@ def send_direct_sms():
         sns = boto3.client('sns')
         
         # Phone number to send to
-        phone_number = '+14155479222'
+        phone_number = '+1XXXXXXXXXX'
         
         # Format test message
         message = "🎯 This is a direct test SMS from Deadpool Game. If you received this, direct SMS is working!"

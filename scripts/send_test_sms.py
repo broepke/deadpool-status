@@ -25,7 +25,7 @@ def send_test_message():
         sns = boto3.client('sns')
         
         # Subscribe phone number to topic
-        phone_number = '+14155479222'
+        phone_number = '+1XXXXXXXXXX'
         print(f"\nSubscribing {phone_number} to SNS topic...")
         
         subscription = sns.subscribe(
