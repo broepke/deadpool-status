@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import boto3
-import os
 from botocore.exceptions import ClientError
+from utils.sns import manage_sns_subscription
 
-def update_user_sms_preferences(phone_number: str):
+def update_user_sms_preferences(phone_number: str, enable: bool = True):
     """Update specific user record with SMS notification fields and phone number"""
     
     # Initialize DynamoDB client
@@ -22,12 +22,21 @@ def update_user_sms_preferences(phone_number: str):
             },
             UpdateExpression='SET SmsNotificationsEnabled = :sms, PhoneVerified = :verified, PhoneNumber = :phone',
             ExpressionAttributeValues={
-                ':sms': True,  # Enable SMS notifications by default
+                ':sms': enable,  # Enable/disable SMS notifications
                 ':verified': False,  # Phone number needs to be verified
                 ':phone': phone_number
             },
             ReturnValues='ALL_NEW'
         )
+        
+        # Manage SNS subscription based on preference
+        if enable:
+            subscription_arn = manage_sns_subscription(phone_number, True)
+            if subscription_arn:
+                print("Successfully subscribed to notifications")
+        else:
+            manage_sns_subscription(phone_number, False)
+            print("Successfully unsubscribed from notifications")
         
         print("Successfully updated user record:")
         print(response['Attributes'])
@@ -40,11 +49,12 @@ def update_user_sms_preferences(phone_number: str):
         raise
 
 if __name__ == '__main__':
-    # Get phone number from command line argument
+    # Get phone number and optional enable/disable flag from command line
     import sys
-    if len(sys.argv) != 2:
-        print("Usage: python update_user_sms.py <phone_number>")
+    if len(sys.argv) < 2 or len(sys.argv) > 3:
+        print("Usage: python update_user_sms.py <phone_number> [enable|disable]")
         print("Example: python update_user_sms.py +12345678900")
+        print("Example: python update_user_sms.py +12345678900 disable")
         sys.exit(1)
     
     phone_number = sys.argv[1]
@@ -53,5 +63,14 @@ if __name__ == '__main__':
         print("Error: Phone number must start with + and include country code")
         print("Example: +12345678900")
         sys.exit(1)
-        
-    update_user_sms_preferences(phone_number)
+    
+    # Check for enable/disable flag
+    enable = True
+    if len(sys.argv) == 3:
+        if sys.argv[2].lower() == 'disable':
+            enable = False
+        elif sys.argv[2].lower() != 'enable':
+            print("Error: Second argument must be either 'enable' or 'disable'")
+            sys.exit(1)
+            
+    update_user_sms_preferences(phone_number, enable)

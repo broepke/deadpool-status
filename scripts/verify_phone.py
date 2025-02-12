@@ -1,33 +1,12 @@
 #!/usr/bin/env python3
 import boto3
-import os
 import random
-import time
 from botocore.exceptions import ClientError
+from utils.sns import send_verification_code, manage_sns_subscription
 
 def generate_verification_code():
     """Generate a 6-digit verification code"""
     return str(random.randint(100000, 999999))
-
-def send_verification_code(phone_number: str, code: str):
-    """Send verification code via SNS"""
-    sns = boto3.client('sns')
-    
-    try:
-        response = sns.publish(
-            PhoneNumber=phone_number,
-            Message=f"Your Deadpool Game verification code is: {code}",
-            MessageAttributes={
-                'AWS.SNS.SMS.SMSType': {
-                    'DataType': 'String',
-                    'StringValue': 'Transactional'
-                }
-            }
-        )
-        return response['MessageId']
-    except ClientError as e:
-        print(f"Error sending verification code: {e.response['Error']['Message']}")
-        raise
 
 def verify_phone_number(phone_number: str):
     """Handle phone number verification process"""
@@ -63,6 +42,12 @@ def verify_phone_number(phone_number: str):
             print("\nPhone number successfully verified!")
             print("Updated user record:")
             print(response['Attributes'])
+            
+            # Subscribe to notifications after successful verification
+            subscription_arn = manage_sns_subscription(phone_number, True)
+            if subscription_arn:
+                print("Successfully subscribed to notifications")
+            
             return True
         else:
             print("\nVerification failed: Code does not match")
