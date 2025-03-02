@@ -13,6 +13,22 @@ def get_sns_topic_arn() -> str:
     """Get the SNS topic ARN from environment variables"""
     return os.environ.get('SNS_TOPIC_ARN')
 
+def clean_phone_number(phone: str) -> str:
+    """Clean phone number by removing all non-standard characters
+    
+    Args:
+        phone: Phone number to clean
+        
+    Returns:
+        Cleaned phone number with only + and digits
+    """
+    # Keep only +, digits, and standard ASCII characters
+    cleaned = ''
+    for char in phone:
+        if char == '+' or char.isdigit():
+            cleaned += char
+    return cleaned
+
 def manage_sns_subscription(phone_number: str, enable: bool = True) -> Optional[str]:
     """Manage SNS topic subscription based on SMS notification preference
     
@@ -23,6 +39,12 @@ def manage_sns_subscription(phone_number: str, enable: bool = True) -> Optional[
     Returns:
         SubscriptionArn if subscribed, None otherwise
     """
+    # Clean the phone number to remove any hidden Unicode characters
+    cleaned_phone = clean_phone_number(phone_number)
+    if cleaned_phone != phone_number:
+        logger.info("Cleaned phone number from %s to %s", phone_number, cleaned_phone)
+        phone_number = cleaned_phone
+    
     sns = boto3.client('sns')
     topic_arn = get_sns_topic_arn()
     
@@ -81,6 +103,12 @@ def send_verification_code(phone_number: str, code: str) -> str:
     Returns:
         MessageId of sent message
     """
+    # Clean the phone number to remove any hidden Unicode characters
+    cleaned_phone = clean_phone_number(phone_number)
+    if cleaned_phone != phone_number:
+        logger.info("Cleaned phone number from %s to %s", phone_number, cleaned_phone)
+        phone_number = cleaned_phone
+        
     sns = boto3.client('sns')
     
     try:
