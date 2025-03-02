@@ -30,7 +30,7 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub deadpool-death-notifications-${Environment}
-      DisplayName: "Deadpool Game"
+      DisplayName: "DP"
       Tags:
         - Key: Environment
           Value: !Ref Environment

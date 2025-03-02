@@ -145,7 +145,7 @@ def send_death_notification(person_name: str, death_date: str) -> None:
         
     try:
         # Format the message
-        message = f"🎯 {person_name} has passed away on {death_date}. Check the game for updates!"
+        message = f"🎯 {person_name} has passed away on {death_date}. Check the app for updates!"
         
         # Publish to SNS topic
         response = sns.publish(
