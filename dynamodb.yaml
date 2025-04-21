@@ -10,22 +10,9 @@ Resources:
       AttributeDefinitions:
         - AttributeName: PK
           AttributeType: S
-        - AttributeName: SK
-          AttributeType: S
       KeySchema:
         - AttributeName: PK
           KeyType: HASH
-        - AttributeName: SK
-          KeyType: RANGE
-      GlobalSecondaryIndexes:
-        - IndexName: SK-PK-index
-          KeySchema:
-            - AttributeName: SK
-              KeyType: HASH
-            - AttributeName: PK
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
       Tags:
         - Key: Environment
           Value: !Ref AWS::StackName

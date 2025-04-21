@@ -5,9 +5,11 @@ AWS Lambda handler for updating person records with Wikipedia data
 import os
 import json
 import logging
+import time
+import random
+import base64
 from datetime import datetime
 from typing import Dict, Any, List
-
 from utils.wiki import (
     get_wiki_id_from_page,
     get_birth_death_date,
@@ -18,7 +20,15 @@ from utils.dynamo import (
     batch_update_persons,
     format_date
 )
-from utils.sns import send_death_notification
+
+# Custom JSON encoder for serializing non-standard types
+class CustomEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        if isinstance(obj, bytes):
+            return obj.decode('utf-8')
+        return json.JSONEncoder.default(self, obj)
 
 # Configure logging
 logger = logging.getLogger()
@@ -69,7 +79,6 @@ def process_person(person: Dict[str, Any]) -> Dict[str, Any]:
         death_date = get_birth_death_date(DEATH_DATE_PROP, wiki_id)
         
         needs_update = False
-        death_notification_needed = False
         
         if birth_date:
             new_birth_date = format_date(birth_date)
@@ -80,10 +89,7 @@ def process_person(person: Dict[str, Any]) -> Dict[str, Any]:
         
         if death_date:
             new_death_date = format_date(death_date)
-            # Check if this is a new death (wasn't recorded before)
             if person.get('DeathDate') != new_death_date:
-                if person.get('DeathDate') is None:
-                    death_notification_needed = True
                 person['DeathDate'] = new_death_date
                 logger.info("Found death date %s for %s", new_death_date, name)
                 needs_update = True
@@ -98,15 +104,6 @@ def process_person(person: Dict[str, Any]) -> Dict[str, Any]:
                 
         if needs_update:
             logger.info("Changes detected for %s. Updated data: %s", name, json.dumps(person, default=str))
-            
-            # Send notification if this is a new death
-            if death_notification_needed:
-                try:
-                    send_death_notification(name, person['DeathDate'])
-                except Exception as e:
-                    logger.error("Failed to send death notification for %s: %s", name, e)
-                    # Continue processing even if notification fails
-            
             return person
     
     except Exception as e:
@@ -116,32 +113,68 @@ def process_person(person: Dict[str, Any]) -> Dict[str, Any]:
     logger.info("No changes needed for %s", name)
     return None
 
-def process_records(persons: List[Dict[str, Any]]) -> tuple[int, int]:
-    """Process a list of person records.
+def process_records(persons: List[Dict[str, Any]], batch_size: int = 10) -> tuple[int, int]:
+    """Process a list of person records in batches.
 
     Args:
         persons: List of person records to process
+        batch_size: Number of records to process in each batch
 
     Returns:
         Tuple of (success_count, failure_count)
     """
+    total_success = 0
+    total_failure = 0
     updates = []
     
-    for person in persons:
-        try:
-            updated_person = process_person(person)
-            if updated_person:
-                updates.append(updated_person)
-        except Exception as e:
-            logger.error("Error processing person %s: %s", 
-                        person.get('Name', 'Unknown'), e)
+    # Process in batches to avoid rate limiting
+    for i in range(0, len(persons), batch_size):
+        batch = persons[i:i+batch_size]
+        batch_number = (i // batch_size) + 1
+        total_batches = (len(persons) + batch_size - 1) // batch_size
+        
+        logger.info(f"Processing batch {batch_number}/{total_batches} ({len(batch)} records)")
+        
+        # Add a delay between batches to avoid rate limiting
+        if i > 0:
+            delay = random.uniform(2.0, 5.0)
+            logger.info(f"Pausing for {delay:.2f} seconds between batches")
+            time.sleep(delay)
+        
+        # Process each person in the batch
+        batch_updates = []
+        for person in batch:
+            try:
+                updated_person = process_person(person)
+                if updated_person:
+                    batch_updates.append(updated_person)
+                    updates.append(updated_person)
+            except Exception as e:
+                logger.error("Error processing person %s: %s",
+                            person.get('Name', 'Unknown'), e)
+        
+        # Update DynamoDB with batch results
+        if batch_updates:
+            logger.info(f"Batch {batch_number} complete: {len(batch_updates)} updates ready")
+            success, failure = batch_update_persons(batch_updates)
+            total_success += success
+            total_failure += failure
+            
+            # Log progress
+            logger.info(
+                f"Progress - Batch: {batch_number}/{total_batches}, "
+                f"Processed: {len(batch)}, Updated: {success}, Failed: {failure}, "
+                f"Running Total - Updated: {total_success}, Failed: {total_failure}"
+            )
+        else:
+            logger.info(f"Batch {batch_number} complete: no updates needed")
     
     if updates:
-        logger.info(f"Processing complete: {len(updates)} updates ready")
-        return batch_update_persons(updates)
-    
-    logger.info("Processing complete: no updates needed")
-    return 0, 0
+        logger.info(f"All batches complete: {len(updates)} total updates processed")
+    else:
+        logger.info("All batches complete: no updates needed")
+        
+    return total_success, total_failure
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """AWS Lambda handler function.
@@ -158,19 +191,86 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     total_updated = 0
     total_failed = 0
     
+    # Get batch size from environment variable or use default
+    batch_size = int(os.environ.get('BATCH_SIZE', '10'))
+    logger.info(f"Using batch size of {batch_size}")
+    
+    # Check if this is a continuation of a previous run
+    continuation_mode = False
+    start_key = None
+    
+    # Extract pagination token from event if present
+    if event and isinstance(event, dict):
+        body = event.get('body')
+        if body and isinstance(body, str):
+            try:
+                body_json = json.loads(body)
+                if isinstance(body_json, dict):
+                    token = body_json.get('paginationToken')
+                    if token:
+                        # Convert string token to DynamoDB key
+                        if isinstance(token, str):
+                            if token.startswith('PERSON#'):
+                                # It's a PK, create a proper key
+                                start_key = {'PK': token, 'SK': 'DETAILS'}
+                            else:
+                                # Try to parse it as JSON
+                                try:
+                                    start_key = json.loads(token)
+                                except:
+                                    # Use as is
+                                    start_key = token
+                        else:
+                            start_key = token
+                        
+                        continuation_mode = True
+                        logger.info(f"Continuing from pagination token: {token}")
+            except json.JSONDecodeError:
+                pass
+        elif isinstance(event, dict):
+            token = event.get('paginationToken')
+            if token:
+                # Convert string token to DynamoDB key
+                if isinstance(token, str):
+                    if token.startswith('PERSON#'):
+                        # It's a PK, create a proper key
+                        start_key = {'PK': token, 'SK': 'DETAILS'}
+                    else:
+                        # Try to parse it as JSON
+                        try:
+                            start_key = json.loads(token)
+                        except:
+                            # Use as is
+                            start_key = token
+                else:
+                    start_key = token
+                
+                continuation_mode = True
+                logger.info(f"Continuing from pagination token: {token}")
+    
     try:
-        # Get all records that need processing
-        persons = get_persons_without_death_date()
+        # Get records that need processing, with a limit to prevent timeouts
+        max_items = int(os.environ.get('MAX_ITEMS_PER_RUN', '100'))
+        logger.info(f"Using maximum of {max_items} items per run")
+        
+        # Get records with pagination
+        persons, next_token = get_persons_without_death_date(max_items=max_items, start_key=start_key)
+        
         if persons:
             total_processed = len(persons)
-            success_count, failure_count = process_records(persons)
+            logger.info(f"Retrieved {total_processed} records to process")
+            
+            # Process records in batches
+            success_count, failure_count = process_records(persons, batch_size)
             total_updated = success_count
             total_failed = failure_count
             
             logger.info(
-                "Progress - Processed: %d, Updated: %d, Failed: %d",
+                "Final Summary - Processed: %d, Updated: %d, Failed: %d",
                 total_processed, total_updated, total_failed
             )
+        else:
+            logger.info("No records to process")
     
     except Exception as e:
         logger.error("Error in main processing loop: %s", e)
@@ -181,7 +281,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'processed': total_processed,
                 'updated': total_updated,
                 'failed': total_failed,
-                'duration': (datetime.now() - start_time).total_seconds()
+                'duration': (datetime.now() - start_time).total_seconds(),
+                'hasMoreRecords': next_token is not None,
+                'paginationToken': next_token
             })
         }
     
@@ -191,12 +293,34 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         duration, total_processed, total_updated, total_failed
     )
     
-    return {
+    # Check if there are more records to process
+    has_more = next_token is not None
+    if has_more:
+        logger.info(f"More records available. Next pagination token: {json.dumps(next_token, default=str)}")
+    else:
+        logger.info("All records processed. No more records available.")
+    
+    # Prepare response
+    response = {
         'statusCode': 200,
         'body': json.dumps({
             'processed': total_processed,
             'updated': total_updated,
             'failed': total_failed,
-            'duration': duration
+            'duration': duration,
+            'hasMoreRecords': has_more
         })
     }
+    
+    # Add pagination token if there are more records
+    if has_more:
+        response['body'] = json.dumps({
+            'processed': total_processed,
+            'updated': total_updated,
+            'failed': total_failed,
+            'duration': duration,
+            'hasMoreRecords': True,
+            'paginationToken': next_token
+        })
+    
+    return response

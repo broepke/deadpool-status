@@ -15,6 +15,11 @@ logging.basicConfig(
 os.environ["TABLE_NAME"] = "Deadpool"
 os.environ["LOG_LEVEL"] = "INFO"
 os.environ["BATCH_SIZE"] = "10"
+os.environ["MAX_ITEMS_PER_RUN"] = "50"
+os.environ["SCAN_BATCH_SIZE"] = "25"
+
+# Set user agent for API requests
+os.environ["USER_AGENT"] = "DeadpoolStatusChecker/1.0 (Local Testing)"
 
 
 def main():

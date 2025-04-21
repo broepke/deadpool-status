@@ -38,7 +38,7 @@ This service checks and updates person records in DynamoDB with birth dates, dea
 - Retry logic for API resilience
 
 ### 4. EventBridge Scheduling
-- **Schedule**: Daily at midnight UTC
+- **Schedule**: Daily at 6:00 PM UTC (1:00 PM Central Time)
 - **Rule Target**: Lambda function
 - **Retry Policy**: 2 retries with exponential backoff
 

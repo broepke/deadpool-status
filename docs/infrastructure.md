@@ -22,7 +22,7 @@ DeadpoolStatusChecker:
       DailyCheck:
         Type: Schedule
         Properties:
-          Schedule: cron(0 0 * * ? *)
+          Schedule: cron(0 18 * * ? *)
           RetryPolicy:
             MaximumRetryAttempts: 2
 ```

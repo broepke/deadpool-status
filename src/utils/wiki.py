@@ -2,54 +2,92 @@
 Wikipedia/Wikidata utilities for fetching person information
 """
 
+import os
 import time
 import logging
 import json
+import random
 from functools import lru_cache
 from datetime import datetime
 import requests
 from typing import Optional, Dict, Any
 
+# Constants
+USER_AGENT = os.environ.get(
+    "USER_AGENT",
+    "DeadpoolStatusChecker/1.0 (https://github.com/yourusername/deadpool-status; your-email@example.com)"
+)
+BASE_DELAY = 2  # Base delay in seconds
+MAX_DELAY = 60  # Maximum delay in seconds
+JITTER = 0.5    # Random jitter factor
+
 # Configure logging
 logger = logging.getLogger()
 
-def fetch_wikidata(params: Dict[str, Any], retries: int = 3, delay: int = 1) -> Optional[Dict[str, Any]]:
-    """Fetch Wikidata with retries on failure.
+def fetch_wikidata(params: Dict[str, Any], retries: int = 5, base_delay: float = BASE_DELAY) -> Optional[Dict[str, Any]]:
+    """Fetch Wikidata with exponential backoff retries on failure.
 
     Args:
         params: Request parameters for the Wikidata API
         retries: Number of retries before giving up
-        delay: Delay in seconds between retries
+        base_delay: Base delay in seconds for exponential backoff
 
     Returns:
         JSON response from the API, or None if all retries fail
     """
     url = "https://www.wikidata.org/w/api.php"
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.5"
+    }
+    
     logger.info(f"Making Wikidata API request to {url}")
     logger.info(f"Parameters: {json.dumps(params, indent=2)}")
 
     for attempt in range(retries):
         try:
-            response = requests.get(url, params=params, timeout=5)
+            # Add a small random delay before each request to avoid hitting rate limits
+            if attempt > 0:
+                # Calculate exponential backoff with jitter
+                delay = min(MAX_DELAY, base_delay * (2 ** attempt))
+                jitter_amount = random.uniform(-JITTER * delay, JITTER * delay)
+                actual_delay = delay + jitter_amount
+                logger.info(f"Waiting {actual_delay:.2f} seconds before retry (attempt {attempt + 1}/{retries})...")
+                time.sleep(actual_delay)
+            
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+            
+            # Handle rate limiting explicitly
+            if response.status_code == 429:
+                retry_after = int(response.headers.get('Retry-After', base_delay * (2 ** attempt)))
+                logger.warning(f"Rate limited. Retry-After: {retry_after} seconds")
+                if attempt < retries - 1:
+                    time.sleep(retry_after)
+                continue
+                
             response.raise_for_status()
             data = response.json()
-            logger.info(f"Wikidata API response: {json.dumps(data, indent=2)}")
+            
+            # Log success but don't log the entire response which can be large
+            logger.info(f"Wikidata API request successful")
             return data
+            
         except (requests.exceptions.RequestException, ValueError) as e:
             logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
-            if attempt < retries - 1:
-                logger.info(f"Waiting {delay} seconds before retry...")
-                time.sleep(delay)
-            continue
+            if attempt >= retries - 1:
+                break
 
     logger.warning("All retries failed for Wikidata fetch")
     return None
 
-def resolve_redirect(title: str) -> Optional[str]:
-    """Resolve Wikipedia page redirects.
+def resolve_redirect(title: str, retries: int = 5, base_delay: float = BASE_DELAY) -> Optional[str]:
+    """Resolve Wikipedia page redirects with retry logic.
 
     Args:
         title: Page URL title (end of URL)
+        retries: Number of retries before giving up
+        base_delay: Base delay in seconds for exponential backoff
 
     Returns:
         Fully resolved title or None if not found
@@ -66,10 +104,50 @@ def resolve_redirect(title: str) -> Optional[str]:
         logger.info(f"Making Wikipedia API request to {wikipedia_api_url}")
         logger.info(f"Parameters: {json.dumps(params, indent=2)}")
 
-        response = requests.get(wikipedia_api_url, params=params, timeout=5)
-        response.raise_for_status()
-        data = response.json()
-        logger.info(f"Wikipedia API response: {json.dumps(data, indent=2)}")
+        headers = {
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.5"
+        }
+        
+        data = None
+        for attempt in range(retries):
+            try:
+                # Add a small random delay before each request to avoid hitting rate limits
+                if attempt > 0:
+                    # Calculate exponential backoff with jitter
+                    delay = min(MAX_DELAY, base_delay * (2 ** attempt))
+                    jitter_amount = random.uniform(-JITTER * delay, JITTER * delay)
+                    actual_delay = delay + jitter_amount
+                    logger.info(f"Waiting {actual_delay:.2f} seconds before retry (attempt {attempt + 1}/{retries})...")
+                    time.sleep(actual_delay)
+                else:
+                    # Small initial delay
+                    time.sleep(random.uniform(0.5, 1.5))
+                
+                response = requests.get(wikipedia_api_url, params=params, headers=headers, timeout=10)
+                
+                # Handle rate limiting explicitly
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get('Retry-After', base_delay * (2 ** attempt)))
+                    logger.warning(f"Rate limited. Retry-After: {retry_after} seconds")
+                    if attempt < retries - 1:
+                        time.sleep(retry_after)
+                    continue
+                    
+                response.raise_for_status()
+                data = response.json()
+                logger.info(f"Wikipedia API request successful")
+                break
+                
+            except (requests.exceptions.RequestException, ValueError) as e:
+                logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
+                if attempt >= retries - 1:
+                    logger.warning("All retries failed for Wikipedia API request")
+                    return None
+        
+        if not data:
+            return None
 
         # Handle redirects
         if "redirects" in data.get("query", {}):

@@ -70,9 +70,9 @@ This service maintains person records in DynamoDB by fetching and updating birth
 The Lambda function is scheduled using Amazon EventBridge (CloudWatch Events). The schedule configuration is defined in `template.yaml`:
 
 ### Default Schedule
-- Runs daily at midnight UTC: `cron(0 0 * * ? *)`
+- Runs daily at 6:00 PM UTC (1:00 PM Central Time): `cron(0 18 * * ? *)`
 - Automatic retries: Maximum 2 retry attempts on failure
-- Timeout: 300 seconds (5 minutes)
+- Timeout: 600 seconds (10 minutes)
 
 ### Modifying the Schedule
 To change the schedule:
@@ -83,7 +83,7 @@ Events:
   DailyCheck:
     Type: Schedule
     Properties:
-      Schedule: cron(0 0 * * ? *)  # Modify this expression
+      Schedule: cron(0 18 * * ? *)  # Modify this expression
 ```
 
 Common cron patterns:
@@ -164,3 +164,61 @@ fields @timestamp, @message
 - Implemented retry logic for API calls with exponential backoff
 - Added detailed execution statistics logging
 - Enhanced error handling and reporting
+
+## Manual Trigger
+
+Use the following command to trigger a single run (processes up to MAX_ITEMS_PER_RUN records):
+
+```bash
+aws lambda invoke --function-name deadpool-status-DeadpoolStatusChecker-7TIXErAlT44O --payload '{}' response.json
+```
+
+## Processing All Records
+
+The Lambda function now supports pagination to process all records over multiple invocations. Each invocation processes a limited number of records (defined by MAX_ITEMS_PER_RUN environment variable) to avoid timeouts.
+
+### Using the process_all_records.py Script
+
+A helper script is provided to automatically process all records by repeatedly invoking the Lambda function:
+
+```bash
+# Make the script executable
+chmod +x process_all_records.py
+
+# Run the script with your Lambda function name
+./process_all_records.py --function-name deadpool-status-DeadpoolStatusChecker-7TIXErAlT44O
+
+# Optional parameters
+./process_all_records.py --function-name deadpool-status-DeadpoolStatusChecker-7TIXErAlT44O --delay 10 --max-invocations 5
+```
+
+Parameters:
+- `--function-name`: (Required) The name of your Lambda function
+- `--delay`: (Optional) Delay between Lambda invocations in seconds (default: 5)
+- `--max-invocations`: (Optional) Maximum number of Lambda invocations (0 for unlimited, default: 0)
+
+### Manual Pagination
+
+You can also manually paginate through records:
+
+1. First invocation:
+   ```bash
+   aws lambda invoke --function-name deadpool-status-DeadpoolStatusChecker-7TIXErAlT44O --payload '{}' response.json
+   ```
+
+2. Check if there are more records:
+   ```bash
+   cat response.json | jq .body | jq -r | jq .hasMoreRecords
+   ```
+
+3. If true, get the pagination token:
+   ```bash
+   cat response.json | jq .body | jq -r | jq .paginationToken
+   ```
+
+4. Use the token for the next invocation:
+   ```bash
+   aws lambda invoke --function-name deadpool-status-DeadpoolStatusChecker-7TIXErAlT44O --payload '{"paginationToken": YOUR_TOKEN_HERE}' response.json
+   ```
+
+5. Repeat steps 2-4 until hasMoreRecords is false
