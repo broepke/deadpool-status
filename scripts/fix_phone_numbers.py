@@ -6,7 +6,7 @@ import os
 
 # Add the src directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-from utils.sns import manage_sns_subscription
+from utils.sns import manage_sns_subscription, get_sns_topic_arn
 
 def clean_phone_number(phone):
     """Clean phone number by removing all non-standard characters"""
@@ -23,21 +23,13 @@ def fix_phone_numbers():
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table('Deadpool')
     
-    # Get SNS topic ARN from Lambda environment
-    lambda_client = boto3.client('lambda')
-    response = lambda_client.get_function_configuration(
-        FunctionName='deadpool-status-DeadpoolStatusChecker-7TIXErAlT44O'
-    )
-    sns_topic_arn = response['Environment']['Variables'].get('SNS_TOPIC_ARN')
-    
+    # Get SNS topic ARN
+    sns_topic_arn = get_sns_topic_arn()
     if not sns_topic_arn:
-        print("Error: SNS_TOPIC_ARN not found in Lambda environment")
+        print("Error: SNS_TOPIC_ARN not found")
         return
         
     print(f"Using SNS Topic ARN: {sns_topic_arn}")
-    
-    # Set the SNS_TOPIC_ARN in the environment for the manage_sns_subscription function
-    os.environ['SNS_TOPIC_ARN'] = sns_topic_arn
     
     try:
         # Get all users with SMS notifications enabled

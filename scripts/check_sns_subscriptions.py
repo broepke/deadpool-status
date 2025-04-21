@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
+import sys
+import os
 import boto3
 from botocore.exceptions import ClientError
+
+# Add the src directory to the Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+from utils.sns import manage_sns_subscription, get_sns_topic_arn
 
 def check_and_fix_subscriptions():
     """
     Check SNS topic subscriptions and add missing phone numbers
     """
     try:
-        # Get SNS topic ARN from Lambda environment
-        lambda_client = boto3.client('lambda')
-        response = lambda_client.get_function_configuration(
-            FunctionName='deadpool-status-DeadpoolStatusChecker-7TIXErAlT44O'
-        )
-        sns_topic_arn = response['Environment']['Variables'].get('SNS_TOPIC_ARN')
-        
+        # Get SNS topic ARN
+        sns_topic_arn = get_sns_topic_arn()
         if not sns_topic_arn:
-            print("Error: SNS_TOPIC_ARN not found in Lambda environment")
+            print("Error: SNS_TOPIC_ARN not found")
             return
             
         print(f"Using SNS Topic ARN: {sns_topic_arn}")
@@ -53,20 +54,16 @@ def check_and_fix_subscriptions():
         
         for user in users:
             phone = user.get('PhoneNumber')
-            name = f"{user.get('FirstName')} {user.get('LastName')}"
+            name = f"{user.get('FirstName', '')} {user.get('LastName', '')}"
             print(f"\nChecking {name} ({phone})")
             
             if phone not in current_endpoints:
                 print(f"Adding subscription for {phone}")
-                try:
-                    result = sns.subscribe(
-                        TopicArn=sns_topic_arn,
-                        Protocol='sms',
-                        Endpoint=phone
-                    )
-                    print(f"Subscription created: {result['SubscriptionArn']}")
-                except Exception as e:
-                    print(f"Error subscribing {phone}: {str(e)}")
+                subscription_arn = manage_sns_subscription(phone, True)
+                if subscription_arn:
+                    print(f"Subscription created: {subscription_arn}")
+                else:
+                    print(f"Failed to subscribe {phone}")
             else:
                 print("Already subscribed")
         

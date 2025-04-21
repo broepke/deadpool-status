@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
+import sys
+import os
 import boto3
 import json
 from datetime import datetime
 from botocore.exceptions import ClientError
+
+# Add the src directory to the Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+from utils.sns import send_notification, get_sns_topic_arn
 
 def test_death_notification():
     """
@@ -37,10 +43,12 @@ def test_death_notification():
         
         # Get notification-enabled users using scan instead of query
         response = table.scan(
-            FilterExpression='begins_with(PK, :prefix) AND SK = :sk AND attribute_exists(SmsNotificationsEnabled)',
+            FilterExpression='begins_with(PK, :prefix) AND SK = :sk AND SmsNotificationsEnabled = :enabled AND PhoneVerified = :verified',
             ExpressionAttributeValues={
                 ':prefix': 'PLAYER#',
-                ':sk': 'DETAILS'
+                ':sk': 'DETAILS',
+                ':enabled': True,
+                ':verified': True
             }
         )
         
@@ -52,13 +60,12 @@ def test_death_notification():
             print(f"  SMS Enabled: {user.get('SmsNotificationsEnabled')}")
             print(f"  Verified: {user.get('PhoneVerified')}")
         
-        # Get SNS topic ARN from Lambda environment
-        lambda_client = boto3.client('lambda')
-        response = lambda_client.get_function_configuration(
-            FunctionName='deadpool-status-DeadpoolStatusChecker-7TIXErAlT44O'
-        )
-        sns_topic_arn = response['Environment']['Variables'].get('SNS_TOPIC_ARN')
-        
+        # Get SNS topic ARN
+        sns_topic_arn = get_sns_topic_arn()
+        if not sns_topic_arn:
+            print("Error: SNS_TOPIC_ARN not found")
+            return
+            
         print(f"\nSNS Topic ARN: {sns_topic_arn}")
         
         # Format and send the actual message
@@ -66,23 +73,15 @@ def test_death_notification():
         print("\nSending message:")
         print(message)
         
-        # Initialize SNS client and send message
-        sns = boto3.client('sns')
-        response = sns.publish(
-            TopicArn=sns_topic_arn,
-            Message=message,
-            MessageAttributes={
-                'AWS.SNS.SMS.SMSType': {
-                    'DataType': 'String',
-                    'StringValue': 'Transactional'
-                }
-            }
-        )
+        # Send notification
+        message_id = send_notification(message)
         
-        print(f"\nNotification sent successfully!")
-        print(f"MessageId: {response['MessageId']}")
-        
-        print("\nTest completed successfully!")
+        if message_id:
+            print(f"\nNotification sent successfully!")
+            print(f"MessageId: {message_id}")
+            print("\nTest completed successfully!")
+        else:
+            print("Failed to send notification")
         
     except ClientError as e:
         print(f"Error during test: {e.response['Error']['Message']}")

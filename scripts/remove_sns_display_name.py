@@ -3,36 +3,19 @@
 Script to remove the DisplayName attribute from the SNS topic
 """
 
-import boto3
-import os
 import sys
+import os
 import logging
+import boto3
 from botocore.exceptions import ClientError
+
+# Add the src directory to the Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+from utils.sns import get_sns_topic_arn
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-def get_sns_topic_arn():
-    """Get the SNS topic ARN from environment variables or CloudFormation outputs"""
-    # Try to get from environment variable first
-    sns_topic_arn = os.environ.get('SNS_TOPIC_ARN')
-    if sns_topic_arn:
-        return sns_topic_arn
-    
-    # If not available, try to get from CloudFormation outputs
-    try:
-        cloudformation = boto3.client('cloudformation')
-        response = cloudformation.describe_stacks(StackName='deadpool-status')
-        
-        for stack in response['Stacks']:
-            for output in stack.get('Outputs', []):
-                if output.get('OutputKey') == 'NotificationTopicArn':
-                    return output.get('OutputValue')
-    except ClientError as e:
-        logger.error(f"Error getting stack outputs: {e}")
-    
-    return None
 
 def update_display_name(topic_arn, new_display_name="DP"):
     """Update the DisplayName attribute of the SNS topic to a minimal value"""
