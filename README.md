@@ -155,6 +155,52 @@ fields @timestamp, @message
 | sort @timestamp desc
 ```
 
+6. Error Counts by Date
+```
+# Extract all error and warning messages
+filter level = "ERROR" or @message like "[ERROR]" or @message like "Error" or @message like "error" or @message like "exception" 
+or level = "WARNING" or @message like "[WARNING]" or @message like "Warning" or @message like "warning"
+
+# Parse out specific error types
+| parse @message "Error * for *:" as error_type, entity_name
+| parse @message "Error processing * for *: *" as operation, entity, error_details
+| parse @message "Error in main processing loop: *" as main_error
+| parse @message "Error getting * for *: *" as data_type, entity_id, api_error
+| parse @message "Error scanning table: *" as dynamo_error
+| parse @message "Error performing batch write: *" as batch_error
+| parse @message "Error managing SNS subscription: *" as sns_error
+| parse @message "Error sending notification: *" as notification_error
+| parse @message "Rate limited. Retry-After: * seconds" as retry_after
+
+# Group errors by type
+| stats 
+    count(*) as error_count,
+    count_distinct(entity_name) as affected_entities,
+    count(if(dynamo_error != '', 1, 0)) as dynamo_errors,
+    count(if(@message like "Error scanning table%", 1, 0)) as scan_errors,
+    count(if(@message like "Error performing batch write%", 1, 0)) as batch_write_errors,
+    count(if(@message like "All retries failed for Wikidata fetch", 1, 0)) as wikidata_failures,
+    count(if(@message like "Rate limited%", 1, 0)) as rate_limit_hits,
+    count(if(@message like "Error sending notification%", 1, 0)) as notification_errors,
+    count(if(@message like "SNS topic ARN not found", 1, 0)) as sns_config_errors,
+    count(if(@message like "Error in main processing loop%", 1, 0)) as main_loop_errors
+    by bin(30m) as time_window
+
+# Sort by time window to see error patterns
+| sort time_window desc
+
+# Display detailed error messages for investigation
+| fields @timestamp, @message, @error_type, @entity_name, @operation, @entity, @error_details, 
+         @main_error, @data_type, @entity_id, @api_error, @dynamo_error, @batch_error, 
+         @sns_error, @notification_error, @retry_after
+```
+
+7. Error Specifics
+```
+# Get all errors from the past 7 days
+filter level = "ERROR" or @message like "[ERROR]" or @message like "Error"
+```
+
 ### CloudWatch Metrics
 - Custom metrics for tracking processing
 - CloudWatch Alarms: Configured for error rates and duration
