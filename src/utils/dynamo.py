@@ -95,7 +95,7 @@ def get_persons_without_death_date(max_items: int = None, start_key: Dict[str, A
             # Check if there are more pages
             last_evaluated_key = response.get('LastEvaluatedKey')
             if not last_evaluated_key:
-                logger.info(f"No more pages to scan")
+                logger.info("No more pages to scan")
                 break
             
             # If we have a max_items limit and we've reached it, stop pagination
@@ -212,7 +212,7 @@ def batch_update_persons(persons: List[Dict[str, Any]], max_batch_size: int = 25
                         if put_request and 'Item' in put_request:
                             table.put_item(Item=put_request['Item'])
                             success_count += 1
-                            logger.info(f"Successfully processed unprocessed item individually")
+                            logger.info("Successfully processed unprocessed item individually")
                     except Exception as e:
                         logger.error(f"Error processing unprocessed item: {e}")
                         failure_count += 1

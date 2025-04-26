@@ -195,7 +195,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     logger.info(f"Using batch size of {batch_size}")
     
     # Check if this is a continuation of a previous run
-    continuation_mode = False
     start_key = None
     
     # Extract pagination token from event if present
@@ -225,7 +224,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         else:
                             start_key = token
                         
-                        continuation_mode = True
                         logger.info(f"Continuing from pagination token: {token}")
             except json.JSONDecodeError:
                 pass
@@ -250,7 +248,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 else:
                     start_key = token
                 
-                continuation_mode = True
                 logger.info(f"Continuing from pagination token: {token}")
     
     try:
