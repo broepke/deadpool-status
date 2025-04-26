@@ -7,7 +7,6 @@ import json
 import logging
 import time
 import random
-import base64
 from datetime import datetime
 from typing import Dict, Any, List
 from utils.wiki import (
@@ -210,14 +209,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     if token:
                         # Convert string token to DynamoDB key
                         if isinstance(token, str):
-                            if token.startswith('PERSON#'):
+                            if token.startswith(('PERSON#', 'PLAYER#')):
                                 # It's a PK, create a proper key
                                 start_key = {'PK': token, 'SK': 'DETAILS'}
+                                logger.info(f"Created proper key from PK: {start_key}")
                             else:
                                 # Try to parse it as JSON
                                 try:
                                     start_key = json.loads(token)
-                                except:
+                                    logger.info(f"Parsed token as JSON: {start_key}")
+                                except Exception as e:
+                                    logger.error(f"Failed to parse token as JSON: {e}")
                                     # Use as is
                                     start_key = token
                         else:
@@ -232,14 +234,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if token:
                 # Convert string token to DynamoDB key
                 if isinstance(token, str):
-                    if token.startswith('PERSON#'):
+                    if token.startswith(('PERSON#', 'PLAYER#')):
                         # It's a PK, create a proper key
                         start_key = {'PK': token, 'SK': 'DETAILS'}
+                        logger.info(f"Created proper key from PK: {start_key}")
                     else:
                         # Try to parse it as JSON
                         try:
                             start_key = json.loads(token)
-                        except:
+                            logger.info(f"Parsed token as JSON: {start_key}")
+                        except Exception as e:
+                            logger.error(f"Failed to parse token as JSON: {e}")
                             # Use as is
                             start_key = token
                 else:
