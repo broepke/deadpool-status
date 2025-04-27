@@ -17,7 +17,7 @@ Globals:
     Runtime: python3.9
     Architectures:
       - x86_64
-    Timeout: 600
+    Timeout: 900
     MemorySize: 256
     Environment:
       Variables:

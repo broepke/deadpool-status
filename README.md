@@ -72,7 +72,7 @@ The Lambda function is scheduled using Amazon EventBridge (CloudWatch Events). T
 ### Default Schedule
 - Runs daily at 6:00 PM UTC (1:00 PM Central Time): `cron(0 18 * * ? *)`
 - Automatic retries: Maximum 2 retry attempts on failure
-- Timeout: 600 seconds (10 minutes)
+- Timeout: 900 seconds (15 minutes)
 
 ### Modifying the Schedule
 To change the schedule:

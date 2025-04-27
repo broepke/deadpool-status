@@ -12,7 +12,7 @@ DeadpoolStatusChecker:
     Handler: lambda_function.lambda_handler
     Runtime: python3.9
     MemorySize: 256
-    Timeout: 300
+    Timeout: 900
     Environment:
       Variables:
         TABLE_NAME: !Ref PersonTable
