@@ -223,6 +223,24 @@ aws lambda invoke --function-name deadpool-status-DeadpoolStatusChecker-7TIXErAl
 
 The Lambda function now supports pagination to process all records over multiple invocations. Each invocation processes a limited number of records (defined by MAX_ITEMS_PER_RUN environment variable) to avoid timeouts.
 
+### Auto-Pagination Feature
+
+The Lambda function now includes an auto-pagination feature that allows it to process all records automatically without external orchestration. When enabled, the Lambda function will invoke itself asynchronously to process the next batch of records when it finishes processing the current batch.
+
+To enable auto-pagination:
+
+1. Set the `AUTO_PAGINATE` environment variable to `true` in the template.yaml file or in the Lambda console.
+2. Set the `MAX_AUTO_INVOCATIONS` environment variable to limit the number of self-invocations (default: 20).
+
+This feature is useful for processing large datasets without requiring Step Functions or external orchestration. The Lambda function will continue to invoke itself until either:
+- All records are processed
+- The maximum number of invocations is reached
+- An error occurs
+
+Each invocation will log its progress and include running totals in the response.
+
+**Note:** Be mindful of AWS Lambda concurrency limits and costs when using this feature. Each self-invocation counts as a separate Lambda invocation for billing purposes.
+
 ### Using the process_all_records.py Script
 
 A helper script is provided to automatically process all records by repeatedly invoking the Lambda function:

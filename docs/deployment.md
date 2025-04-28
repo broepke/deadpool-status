@@ -128,7 +128,35 @@ This uses the settings in your `samconfig.toml` file:
 
 ## Processing All Records
 
-After deployment, you can process all records using the provided script:
+There are two ways to process all records:
+
+### Option 1: Auto-Pagination (Recommended)
+
+The Lambda function now includes an auto-pagination feature that allows it to process all records automatically without external orchestration:
+
+1. Enable auto-pagination by setting these environment variables in template.yaml:
+   ```yaml
+   Environment:
+     Variables:
+       AUTO_PAGINATE: true
+       MAX_AUTO_INVOCATIONS: 20
+   ```
+
+2. Deploy the updated template:
+   ```bash
+   sam deploy
+   ```
+
+3. Invoke the Lambda function once to start the process:
+   ```bash
+   aws lambda invoke --function-name deadpool-status-DeadpoolStatusChecker-XXXXXXXXXXXX --payload '{}' response.json
+   ```
+
+The Lambda function will automatically invoke itself to process subsequent batches until all records are processed or the maximum number of invocations is reached.
+
+### Option 2: Using the process_all_records.py Script
+
+If you prefer not to use auto-pagination, you can use the provided script:
 
 ```bash
 # Get your Lambda function name from the deployment output
@@ -141,7 +169,7 @@ chmod +x process_all_records.py
 ./process_all_records.py --function-name deadpool-status-DeadpoolStatusChecker-XXXXXXXXXXXX
 ```
 
-### Optional Parameters
+#### Optional Parameters
 
 The script supports additional parameters:
 ```bash
@@ -284,20 +312,31 @@ Ensure your AWS CLI is configured with appropriate credentials that have permiss
 
 The deployment uses an S3 bucket named "deadpool-status" for storing deployment artifacts. Make sure this bucket exists in your account or update the `samconfig.toml` file.
 
-### 4. Rate Limiting
+### 4. Auto-Pagination Considerations
+
+When using the auto-pagination feature:
+
+- **Lambda Concurrency**: Each self-invocation runs as a separate Lambda invocation, which counts against your account's concurrency limits.
+- **Billing**: Each self-invocation is billed separately as a new Lambda invocation.
+- **Monitoring**: You can monitor the progress by checking CloudWatch Logs for each invocation.
+- **Timeout**: If a single invocation times out, the auto-pagination chain will be broken. Ensure your Lambda timeout is sufficient for processing the batch size you've configured.
+- **Error Handling**: If an error occurs during processing, the auto-pagination chain will be broken. Check CloudWatch Logs for error messages.
+- **IAM Permissions**: The Lambda function needs permission to invoke itself. This is configured in the template.yaml file using a resource pattern that avoids circular dependencies.
+
+### 5. Rate Limiting
 
 The code includes retry logic and rate limiting protection for Wikipedia/Wikidata API calls, but be aware that processing large numbers of records might still hit API limits. Consider:
 - Using the `--delay` parameter with `process_all_records.py`
 - Adjusting the `BATCH_SIZE` environment variable
 - Implementing additional rate limiting if needed
 
-### 5. SNS Notifications
+### 6. SNS Notifications
 
 For death notifications, ensure the SNS topic ARN is properly configured. You can set it via:
 - Environment variable: `SNS_TOPIC_ARN`
 - CloudFormation output from another stack
 
-### 6. Scheduling
+### 7. Scheduling
 
 The Lambda function is scheduled to run daily at 6:00 PM UTC (1:00 PM Central Time) by default. To modify this:
 

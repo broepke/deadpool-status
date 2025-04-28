@@ -7,6 +7,7 @@ import json
 import logging
 import time
 import random
+import boto3
 from datetime import datetime
 from typing import Dict, Any, List
 from utils.wiki import (
@@ -299,6 +300,50 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     has_more = next_token is not None
     if has_more:
         logger.info(f"More records available. Next pagination token: {json.dumps(next_token, default=str)}")
+        
+        # Check if we should self-invoke to process the next batch
+        auto_paginate = os.environ.get('AUTO_PAGINATE', 'false').lower() == 'true'
+        invocation_count = int(event.get('invocationCount', 0)) + 1
+        max_invocations = int(os.environ.get('MAX_AUTO_INVOCATIONS', '10'))
+        running_total_processed = int(event.get('runningTotalProcessed', 0)) + total_processed
+        running_total_updated = int(event.get('runningTotalUpdated', 0)) + total_updated
+        running_total_failed = int(event.get('runningTotalFailed', 0)) + total_failed
+        
+        if auto_paginate and invocation_count < max_invocations:
+            logger.info(f"Auto-pagination enabled. Self-invoking for next batch. Invocation {invocation_count}/{max_invocations}")
+            
+            # Create payload for next invocation
+            payload = {
+                'paginationToken': next_token,
+                'invocationCount': invocation_count,
+                'runningTotalProcessed': running_total_processed,
+                'runningTotalUpdated': running_total_updated,
+                'runningTotalFailed': running_total_failed
+            }
+            
+            try:
+                # Get the function name from the context or environment
+                function_name = context.function_name
+                
+                # Create Lambda client
+                lambda_client = boto3.client('lambda')
+                
+                # Invoke the function asynchronously
+                response = lambda_client.invoke(
+                    FunctionName=function_name,
+                    InvocationType='Event',  # Asynchronous invocation
+                    Payload=json.dumps(payload)
+                )
+                
+                status_code = response.get('StatusCode')
+                logger.info(f"Successfully invoked next batch processing with pagination token. Status code: {status_code}")
+            except Exception as e:
+                logger.error(f"Error invoking next batch: {e}")
+        else:
+            if not auto_paginate:
+                logger.info("Auto-pagination disabled. Not self-invoking for next batch.")
+            elif invocation_count >= max_invocations:
+                logger.info(f"Reached maximum auto-invocations ({max_invocations}). Not self-invoking for next batch.")
     else:
         logger.info("All records processed. No more records available.")
     
@@ -310,7 +355,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'updated': total_updated,
             'failed': total_failed,
             'duration': duration,
-            'hasMoreRecords': has_more
+            'hasMoreRecords': has_more,
+            'invocationCount': event.get('invocationCount', 0) + 1,
+            'runningTotalProcessed': running_total_processed if has_more else total_processed,
+            'runningTotalUpdated': running_total_updated if has_more else total_updated,
+            'runningTotalFailed': running_total_failed if has_more else total_failed
         })
     }
     
@@ -322,7 +371,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'failed': total_failed,
             'duration': duration,
             'hasMoreRecords': True,
-            'paginationToken': next_token
+            'paginationToken': next_token,
+            'invocationCount': event.get('invocationCount', 0) + 1,
+            'runningTotalProcessed': running_total_processed,
+            'runningTotalUpdated': running_total_updated,
+            'runningTotalFailed': running_total_failed
         })
     
     return response

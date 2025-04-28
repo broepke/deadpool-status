@@ -24,6 +24,9 @@ Globals:
         LOG_LEVEL: INFO
         BATCH_SIZE: 50
         TABLE_NAME: Deadpool
+        MAX_ITEMS_PER_RUN: 500
+        AUTO_PAGINATE: true
+        MAX_AUTO_INVOCATIONS: 20
 
 Resources:
   DeadpoolStatusChecker:
@@ -45,6 +48,10 @@ Resources:
                 - ec2:DeleteNetworkInterface
                 - ec2:DescribeNetworkInterfaces
               Resource: "*"
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-DeadpoolStatusChecker-*"
       Events:
         DailyCheck:
           Type: Schedule
