@@ -1,1 +1,1 @@
-{"statusCode": 200, "body": "{\"processed\": 42, \"updated\": 0, \"failed\": 0, \"duration\": 8.810576, \"hasMoreRecords\": false}"}
+{"statusCode": 200, "body": "{\"processed\": 42, \"updated\": 0, \"failed\": 0, \"duration\": 1.772657, \"hasMoreRecords\": false, \"invocationCount\": 1, \"runningTotalProcessed\": 42, \"runningTotalUpdated\": 0, \"runningTotalFailed\": 0}"}
