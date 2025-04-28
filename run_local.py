@@ -15,7 +15,7 @@ logging.basicConfig(
 os.environ["TABLE_NAME"] = "Deadpool"
 os.environ["LOG_LEVEL"] = "INFO"
 os.environ["BATCH_SIZE"] = "10"
-os.environ["MAX_ITEMS_PER_RUN"] = "50"
+os.environ["MAX_ITEMS_PER_RUN"] = "100"
 os.environ["SCAN_BATCH_SIZE"] = "25"
 
 # Set user agent for API requests

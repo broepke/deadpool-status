@@ -253,7 +253,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     try:
         # Get records that need processing, with a limit to prevent timeouts
-        max_items = int(os.environ.get('MAX_ITEMS_PER_RUN', '500'))
+        max_items = int(os.environ.get('MAX_ITEMS_PER_RUN', '100'))
         logger.info(f"Using maximum of {max_items} items per run")
         
         # Get records with pagination
