@@ -1,1 +1,0 @@
-{"statusCode": 200, "body": "{\"processed\": 100, \"updated\": 0, \"failed\": 0, \"duration\": 31.463223, \"hasMoreRecords\": true, \"paginationToken\": \"PERSON#2c03c387-f867-4671-b0ea-29ac18845faf\", \"invocationCount\": 1, \"runningTotalProcessed\": 100, \"runningTotalUpdated\": 0, \"runningTotalFailed\": 0}"}
